@@ -1,0 +1,372 @@
+// Site Imaging Tool: created by PCVs Asa Holland and Marissa Kuntz 2019
+// What does it do?
+//    The tool works to export a historical record of how 'green' a site has been,
+//      as well as how it has changed in 'green-ness' over time. The tool uses NDVI,
+//      a metric collected using infrared and near-infrared wave lengths of lights,
+//      to represent how green a given location.
+//    This has implications for the Agroforestry extension program, as it can represent
+//      the changes brought to a location through desertification, deforestation, or the
+//      planting of trees and crops.
+// What data sources does it use?
+//    The tool references two satellite imagery datasets to create a historical profile of a site.
+//    Imagery Collection 1: LandSAT 7, 1999-Present, Higher Resolution ()
+//        source: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LE07_C01_T1_8DAY_NDVI
+//    Imagery Collection 2: AVHHR, 1981-Present, Lower Resolution (30 meters per pixel)
+//        source: https://developers.google.com/earth-engine/datasets/catalog/NOAA_CDR_AVHRR_NDVI_V4
+// What does the tool need from a user?
+//    The tool takes GPS coordinates and name of a village.
+
+
+// Load a PCV site coordinates in the following fomat:
+// var sites = [  [Longitude (decimal degrees), Latitude (decimal degrees), 'Site Name, Region'],  ];
+
+// Example:
+// var sites = [[-13.5263, 15.92542, 'Kobilo, Matam'],];
+
+
+// DO NOT MODIFY COMMENT NOTES ABOVE THIS POINT
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// DO NOT MODIFY COMMENT NOTES ABOVE THIS POINT
+var coord_long = 0;
+var coord_lat = 0;
+var site_name = '';
+var text_name = '';
+var text_coord_long = '';
+var text_coord_lat = '';
+
+var label = ui.Label('Enter village name and region below. \nExample: Kobilo, Matam');
+print(label);
+
+var textbox_village_name = ui.Textbox({
+  placeholder: 'Enter village name and region here...',
+  onChange: function(text_name) {
+    print('You entered the village name: ' + text_name + '');
+    site_name = text_name;
+  }
+});
+print(textbox_village_name);
+
+
+var label = ui.Label('Enter village longitude in decimal degrees below. \nExample: -13.5263');
+print(label);
+
+var textbox_coord_long = ui.Textbox({
+  placeholder: 'Enter village longitude here...',
+  onChange: function(text_coord_long) {
+    print('You entered a longitude of: ' + text_coord_long + '');
+    coord_long = text_coord_long;
+  }
+});
+print(textbox_coord_long);
+
+var label = ui.Label('Enter village latitude in decimal degrees below. \nExample: 15.92542');
+print(label);
+
+var textbox_coord_lat = ui.Textbox({
+  placeholder: 'Enter village latitude here...',
+  onChange: function(text_coord_lat) {
+    print('You entered a latitude of: ' + text_coord_lat + '');
+    coord_lat = text_coord_lat;
+  }
+});
+print(textbox_coord_lat);
+
+
+var sites = [[coord_long, coord_lat, site_name],];
+
+
+
+// DO NOT MODIFY CODE BELOW THIS POINT
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// DO NOT MODIFY CODE BELOW THIS POINT
+
+
+
+// Set initial variables:
+// i: counting integer
+var i; 
+// radius: radius of plot around the site coordinates in meters, suggested value: 1500
+var radius = 1500;
+// scaledView: set the 'zoom' of the final resting place of your image, suggested value: 15
+var scaledView = 13;
+// startYear: initial year for window of time to monitor change: dataset starts in 1999
+var startYear = '2000';
+// endYear: final year in range of time for function, dataset should continue to the present
+var endYear = '2017';
+
+
+// define function to subtract (overlay and show change) the two given years of data at the given stie
+var subtractNDVI = function(siteCoord1, siteCoord2, siteName, startYear, endYear) {
+
+  var site = ee.Geometry.Point(siteCoord1, siteCoord2);
+  var roi = site.buffer(radius);
+
+var colorizedVis = {
+  min: 0.0,
+  max: 1.0,
+  palette: [
+    'FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718', '74A901',
+    '66A000', '529400', '3E8601', '207401', '056201', '004C00', '023B01',
+    '012E01', '011D01', '011301'
+  ],
+};
+
+var rectangle = ee.Geometry.Rectangle([-40, -20, 40, 20]);
+
+var datasetStart = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_NDVI')
+                  .filterBounds(roi)
+                   .filterDate(startYear +'-09-01', startYear + '-09-30');
+// Make a "greenest" pixel composite.
+var greenestStart = datasetStart.qualityMosaic('NDVI');
+// Display the result.
+var visParams = {bands: ['B4', 'B3', 'B2'], max: 0.3};
+//Map.addLayer(greenestStart, colorizedVis, 'Greenest pixel composite Start Year');
+
+
+
+var datasetEnd = ee.ImageCollection('LANDSAT/LE07/C01/T1_8DAY_NDVI')
+                  .filterBounds(roi)
+                   .filterDate(endYear +'-01-01', endYear + '-12-30');
+// Make a "greenest" pixel composite.
+var greenestEnd = datasetEnd.qualityMosaic('NDVI');
+//Map.addLayer(greenestEnd, colorizedVis, 'Greenest pixel composite End Year');
+
+var changeNDVI = greenestEnd.subtract(greenestStart);
+Map.addLayer(changeNDVI, { min:-0.8, med: 0.0, max: 0.5, palette: [ 'red', 'white', 'green']}, "NDVI Change from 2000 to 2018" );
+
+Map.centerObject(site, scaledView);
+
+
+
+Map.addLayer(roi, {color: 'FF0000'}, 'RoI');
+//var site_title = "Average NDVI in " + siteName;
+
+//Create a Chart for NDVI at the point
+//print(ui.Chart.image.series({
+  //imageCollection: changeNDVI,
+  //region: roi,
+ // reducer: ee.Reducer.mean(),
+ //   scale: 5000,
+//}).setOptions({title: site_title}));
+
+
+
+// Export the image, specifying scale and region.
+//Export.image.toDrive({
+//  image: changeNDVI,
+//  description: 'NDVI Change in ' + siteName + ' from ' + startYear + ' to ' + endYear,
+//  scale: scaledView,
+//  region: roi,
+//    fileFormat: 'GEOTIFF'
+//});
+  
+};
+
+
+// definte functin to create chart of historical NDVI levels from 1981 to present at site coordinates
+var exportNDVI = function(siteCoord1, siteCoord2, siteName) {
+
+  var site = ee.Geometry.Point(siteCoord1, siteCoord2);
+  var roi = site.buffer(2500);
+
+// Make start and end layers
+  var start = ee.Date.fromYMD(1981,07,01);
+
+  var dataset = ee.ImageCollection('NOAA/CDR/AVHRR/NDVI/V4')
+                  .filterBounds(roi)
+                  .select('NDVI');
+
+// Get the number of images.
+//var count = dataset.size();
+//print('Count dataset: ', count);
+
+
+  var ndvi = dataset;
+    var ndviVis = {
+   min: -1000.0,
+   max: 5000.0,
+  };
+
+  var temporalCollection = function(collection, start, count, interval, units) {
+  // Create a sequence of numbers, one for each time interval.
+   var sequence = ee.List.sequence(0, ee.Number(count).subtract(1));
+
+   var originalStartDate = ee.Date(start);
+
+   return ee.ImageCollection(sequence.map(function(i) {
+    // Get the start date of the current sequence.
+      var startDate = originalStartDate.advance(ee.Number(interval).multiply(i), units);
+
+    // Get the end date of the current sequence.
+     var endDate = originalStartDate.advance(
+        ee.Number(interval).multiply(ee.Number(i).add(1)), units);
+
+     return collection.filterDate(startDate, endDate)
+          .sort('CLOUD_COVER').first()
+          .reduce(ee.Reducer.mean())
+        
+          .set('system:time_start', startDate.millis())
+          .set('system:time_end', endDate.millis());
+    }));
+};
+  
+  var dated_dataset = temporalCollection(dataset, start, 444, 1, 'month');
+//var count = dated_dataset.size();
+//print('Count dataset: ', count);
+
+// Add a rescaled NDVI band to each image in the collection.
+// This avoides graphing the band width and actually charts the NDVI value.
+// 0.0001 conversion rate taken from NOAA scaling recommendation.
+rescaled_dated_dataset = dated_dataset.map(
+   function(img) {
+      var mean_rescaled_NDVI = img.multiply(0.0001)
+                           .rename('Mean NDVI');
+      return img.addBands(mean_rescaled_NDVI);
+   }
+  );
+
+  var rescaled_dated_dataset = rescaled_dated_dataset.select('Mean NDVI');
+
+var site_title = "Average NDVI in " + siteName;
+
+//Create a Chart for NDVI at the point
+print(ui.Chart.image.series({
+  imageCollection: rescaled_dated_dataset,
+  region: roi,
+  reducer: ee.Reducer.mean(),
+    scale: 5000,
+}).setOptions({title: site_title}));
+
+};
+
+// definte functin to create chart of historical NDVI levels from 1981 to present at site coordinates
+var exportNDVI_years_max = function(siteCoord1, siteCoord2, siteName) {
+
+  var site = ee.Geometry.Point(siteCoord1, siteCoord2);
+  var roi = site.buffer(2500);
+
+// Make start and end layers
+  var start = ee.Date.fromYMD(1981,07,01);
+
+  var dataset = ee.ImageCollection('NOAA/CDR/AVHRR/NDVI/V4')
+                  .filterBounds(roi)
+                  .select('NDVI');
+
+// Get the number of images.
+//var count = dataset.size();
+//print('Count dataset: ', count);
+
+
+  var ndvi = dataset;
+    var ndviVis = {
+   min: -1000.0,
+   max: 5000.0,
+  };
+
+  var temporalCollection = function(collection, start, count, interval, units) {
+  // Create a sequence of numbers, one for each time interval.
+   var sequence = ee.List.sequence(0, ee.Number(count).subtract(1));
+
+   var originalStartDate = ee.Date(start);
+
+   return ee.ImageCollection(sequence.map(function(i) {
+    // Get the start date of the current sequence.
+      var startDate = originalStartDate.advance(ee.Number(interval).multiply(i), units);
+
+    // Get the end date of the current sequence.
+     var endDate = originalStartDate.advance(
+        ee.Number(interval).multiply(ee.Number(i).add(1)), units);
+
+     return collection.filterDate(startDate, endDate)
+          .sort('CLOUD_COVER').first()
+          .reduce(ee.Reducer.mean())
+        
+          .set('system:time_start', startDate.millis())
+          .set('system:time_end', endDate.millis());
+    }));
+};
+
+  //var dated_dataset = temporalCollection(dataset, start, 444, 1, 'month');
+  //var temporalCollection = function(collection, start, count, interval, units) {
+  var dated_dataset = temporalCollection(dataset, start, 444, 1, 'month');
+//var count = dated_dataset.size();
+//print('Count dataset: ', count);
+
+
+
+// TO DO: Currently Not Functioning
+// create function to take in temporal collection and export just the max NDVI value per year
+//  var maxPerYear = function(i){
+//    i = ee.Number(i);
+//    var years = ee.List.sequence(1981, 2018);
+//    var filtered_col = years.map(function(j) {
+//      var filtered = years.filter(ee.Filter.calendarRange(i,i, 'month'))
+//                        .filter.ee.Filter.calendarRange(j,j, 'year');
+//      return filtered});
+//  return filtered_col;
+//  };
+  
+//  var months = ee.List.sequence(1,12);
+ // var monthly_averages = months.map(dated_dataset).flatten();
+
+
+// Add a rescaled NDVI band to each image in the collection.
+// This avoides graphing the band width and actually charts the NDVI value.
+// 0.0001 conversion rate taken from NOAA scaling recommendation.
+rescaled_dated_dataset = dated_dataset.map(
+   function(img) {
+      var mean_rescaled_NDVI = img.multiply(0.0001)
+                           .rename('Mean NDVI');
+      return img.addBands(mean_rescaled_NDVI);
+   }
+  );
+
+  var rescaled_dated_dataset = rescaled_dated_dataset.select('Mean NDVI');
+
+var site_title = "Average NDVI in " + siteName;
+
+
+
+//Create a Chart for NDVI at the point
+print(ui.Chart.image.series({
+  imageCollection: rescaled_dated_dataset,
+  region: roi,
+  reducer: ee.Reducer.mean(),
+    scale: 5000,
+}).setOptions({title: site_title}));
+
+};
+
+
+// Set initial values for given variables (prevents errors, do not modify or delete)
+var siteCoord1 = 0;
+var siteCoord2 = 0;
+var siteName = '';
+
+// define function to perform process over all coordinates given
+function chart_me(x) {
+  for (i=0; i<x.length; i++) {
+    siteCoord1 = sites[i][0];
+    siteCoord2 = sites[i][1];
+    siteName = sites[i][2];
+    subtractNDVI(siteCoord1, siteCoord2, siteName, startYear, endYear);
+    exportNDVI(siteCoord1, siteCoord2, siteName);
+    exportNDVI_years_max(siteCoord1, siteCoord2, siteName);
+    siteCoord1 = 0;
+    siteCoord2 = 0;
+    siteName = '';
+  }
+}
+
+
+// runs the function
+// chart_me(sites);
+
+var button = ui.Button({
+  label: 'Generate NDVI history',
+  onClick: function() {
+    chart_me(sites);
+  }
+});
+print(button);
+
